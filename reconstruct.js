@@ -59,7 +59,33 @@ function solve(size, regionMap) {
 }
 
 function parseLinkedInSource(text) {
-  // Format 1 (View Source): puzzle JSON in the hydration payload —
+  // Format 3 (Inspect → copy outerHTML, current build): CSS classes are content-hashed now, but each
+  // cell has a self-describing aria-label — aria-label="Empty cell of color Lavender, row 1, column 5".
+  const labelRe = /aria-label="(Empty|Cross|Queen)(?: cell)? of color ([^,]+), row (\d+), column (\d+)"/g;
+  const labelCells = [];
+  let lm;
+  while ((lm = labelRe.exec(text))) {
+    labelCells.push({ state: lm[1], color: lm[2], row: +lm[3] - 1, col: +lm[4] - 1 });
+  }
+  if (labelCells.length) {
+    const size = Math.round(Math.sqrt(labelCells.length));
+    if (size * size === labelCells.length && size >= MIN_N && size <= MAX_N) {
+      const byPos = new Map();
+      for (const c of labelCells) byPos.set(c.row * size + c.col, c);
+      if (byPos.size === size * size) {
+        const colorMap = new Map();
+        const reg = new Array(size * size);
+        for (let pos = 0; pos < size * size; pos++) {
+          const c = byPos.get(pos);
+          if (!colorMap.has(c.color)) colorMap.set(c.color, colorMap.size);
+          reg[pos] = colorMap.get(c.color);
+        }
+        return { n: size, regions: reg, colors: colorMap.size };
+      }
+    }
+  }
+
+  // Format 1 (View Source, legacy): puzzle JSON in the hydration payload —
   // "gridSize":8 ... "colors":[0,0,0,1,0,0,0,2] per row (quotes may be \-escaped).
   const rows = [];
   const rowRe = /\\?"colors\\?":\s*\[([0-9,\s]+)\]/g;
