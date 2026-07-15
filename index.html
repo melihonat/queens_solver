@@ -207,7 +207,6 @@
   <button id="playModeBtn">🎮 Play</button>
   <button id="importBtn">📋 Import</button>
   <button id="solveBtn" class="primary">Solve</button>
-  <button id="hintBtn">Hint</button>
   <button id="clearMarksBtn">Clear marks</button>
   <button id="resetBtn">Reset board</button>
 </div>
@@ -246,7 +245,7 @@
     { name: "Pink",   hex: "#DFA0BF" },
     { name: "Mauve",  hex: "#9B8BBE" },
   ];
-  const MIN_N = 6, MAX_N = 11;
+  const MIN_N = 5, MAX_N = 14;
 
   let n = 8;
   let regions = [];      // n*n array of palette index or -1
@@ -488,7 +487,7 @@
             reg.push(colorMap.get(c));
           }
         }
-        return { n: size, regions: reg, colors: colorMap.size };
+        return { n: size, regions: reg, colors: colorMap.size, solution: extractEmbeddedSolution(text, size) };
       }
     }
     const cells = [];
@@ -516,6 +515,62 @@
       reg[pos] = colorMap.get(color);
     });
     return { n: size, regions: reg, colors: colorMap.size };
+  }
+
+  // LinkedIn embeds the official answer: "solution":[{"row":0,"col":7},...]
+  // (quotes may be \-escaped). Returns cols[row] = col, or null if absent/invalid.
+  function extractEmbeddedSolution(text, size) {
+    const startM = /\\?"solution\\?":\s*\[/.exec(text);
+    if (!startM) return null;
+    let i = startM.index + startM[0].length, depth = 1;
+    const start = i;
+    while (i < text.length && depth > 0) {
+      if (text[i] === "[") depth++;
+      else if (text[i] === "]") depth--;
+      i++;
+    }
+    const block = text.slice(start, i - 1);
+    const cols = new Array(size).fill(-1);
+    const pairRe = /\\?"row\\?":\s*(\d+)\s*,\s*\\?"col\\?":\s*(\d+)/g;
+    let m, count = 0;
+    while ((m = pairRe.exec(block))) {
+      const r = +m[1], c = +m[2];
+      if (r >= size || c >= size || cols[r] !== -1) return null;
+      cols[r] = c;
+      count++;
+    }
+    return (count === size && !cols.includes(-1)) ? cols : null;
+  }
+
+  // Place the solution's queens on the board and display it.
+  // Uses `preferred` (embedded answer) if it passes all rules, else runs the solver.
+  function showSolution(preferred) {
+    let sol = preferred && isValidSolution(preferred) ? preferred : null;
+    if (!sol) {
+      const err = validateRegions();
+      if (err) { setStatus(err, "error"); return; }
+      sol = solve(n, regions);
+    }
+    if (!sol) {
+      setStatus("No solution exists for this region layout — double-check the colors.", "error");
+      return;
+    }
+    solution = sol;
+    marks = new Array(n * n).fill(0);
+    sol.forEach((c, r) => { marks[idx(r, c)] = 2; });
+    mode = "play";
+    updateModeButtons();
+    render();
+    setStatus("Solution 👑 — one queen per row, column, and region.", "success");
+  }
+
+  function isValidSolution(cols) {
+    if (!Array.isArray(cols) || cols.length !== n) return false;
+    if (new Set(cols).size !== n || cols.some(c => c < 0 || c >= n)) return false;
+    const regs = new Set(cols.map((c, r) => regions[idx(r, c)]));
+    if (regs.size !== n) return false;
+    for (let r = 1; r < n; r++) if (Math.abs(cols[r] - cols[r - 1]) <= 1) return false;
+    return true;
   }
 
   function applyImport(size, reg) {
@@ -557,7 +612,7 @@
     if (res.error) { setStatus(res.error, "error"); return; }
     importOverlay.classList.remove("visible");
     applyImport(res.n, res.regions);
-    setStatus(`Imported ${res.n}×${res.n} board with ${res.colors} regions. Hit Solve!`, "success");
+    showSolution(res.solution || null);
   });
   importOverlay.addEventListener("click", e => {
     if (e.target === importOverlay) importOverlay.classList.remove("visible");
@@ -565,39 +620,7 @@
 
   // ---------- buttons ----------
   document.getElementById("solveBtn").addEventListener("click", () => {
-    const err = validateRegions();
-    if (err) { setStatus(err, "error"); return; }
-    solution = solve(n, regions);
-    if (!solution) {
-      setStatus("No solution exists for this region layout — double-check the colors.", "error");
-      return;
-    }
-    marks = new Array(n * n).fill(0);
-    solution.forEach((c, r) => { marks[idx(r, c)] = 2; });
-    mode = "play";
-    updateModeButtons();
-    render();
-    setStatus("Solved! 👑 placed for every row, column, and region.", "success");
-  });
-
-  document.getElementById("hintBtn").addEventListener("click", () => {
-    const err = validateRegions();
-    if (err) { setStatus(err, "error"); return; }
-    if (!solution) solution = solve(n, regions);
-    if (!solution) { setStatus("No solution exists for this region layout.", "error"); return; }
-    // find first row whose correct queen isn't placed
-    for (let r = 0; r < n; r++) {
-      const i = idx(r, solution[r]);
-      if (marks[i] !== 2) {
-        marks[i] = 2;
-        mode = "play";
-        updateModeButtons();
-        render();
-        setStatus(`Hint: queen placed in row ${r + 1}.`, "");
-        return;
-      }
-    }
-    setStatus("All queens are already placed!", "success");
+    showSolution(null);
   });
 
   document.getElementById("clearMarksBtn").addEventListener("click", () => {
@@ -642,10 +665,12 @@
   });
 
   // ---------- boot ----------
-  if (!loadFromHash() && !load()) initBoard(8);
+  const bootedFromHash = loadFromHash();
+  if (!bootedFromHash && !load()) initBoard(8);
   sizeSel.value = n;
   render();
   updateModeButtons();
+  if (bootedFromHash) showSolution(null);
 })();
 </script>
 </body>

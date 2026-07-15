@@ -8,15 +8,15 @@ Open `index.html` in a browser — no build step, no dependencies.
 
 ## Getting the day's board in
 
-Three ways, from most to least automatic:
+Three ways, from most to least automatic. **Pasting the page source shows the solution immediately** — no extra clicks:
 
-1. **📋 Import button (in the app)** — on the LinkedIn Queens page, open View Source (or Inspect and copy the grid's outer HTML), paste it into the Import dialog, and the board is reconstructed from the `cell-color-N` classes. Then hit **Solve**.
-2. **Ask Claude to reconstruct** — paste the page source into `puzzle_source.txt` and say **"reconstruct"**. Claude runs `node reconstruct.js --open`, which parses the source and opens the solver with the board pre-loaded (via a `#b=<n>:<cells>` URL hash).
-3. **🎨 Paint mode** — draw the regions by hand with click/drag; right-click erases.
+1. **📋 Import button (in the app)** — on the LinkedIn Queens page, open View Source, select all, paste it into the Import dialog. The board is read from the embedded puzzle JSON (`"gridSize"`/`"colors"`), and the answer is displayed instantly — straight from the page's embedded `"solution"` when present, otherwise computed by the solver. Copying the grid's outer HTML from Inspect (`cell-color-N` classes) also works.
+2. **Ask Claude to reconstruct** — paste the page source into `puzzle_source.txt` and say **"reconstruct"**. Claude runs `node reconstruct.js --open`, which prints the answer in the terminal and opens the solver with the solution already placed.
+3. **🎨 Paint mode** — draw the regions by hand with click/drag (right-click erases), then hit **Solve**.
 
 ## Features
 
-- Backtracking solver with board validation (unpainted cells, wrong region count, unsolvable layouts)
+- Instant solution on import: uses LinkedIn's embedded answer when available, backtracking solver otherwise
+- Board validation (unpainted cells, wrong region count, unsolvable layouts)
 - Play mode: tap to cycle ✕ → 👑 → empty, with live conflict highlighting and win detection
-- Hint button: reveals one correct queen at a time
-- Board sizes 6×6 to 11×11, auto-saved to localStorage
+- Board sizes 5×5 to 14×14, auto-saved to localStorage

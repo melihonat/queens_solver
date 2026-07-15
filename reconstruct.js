@@ -7,7 +7,56 @@ const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 
-const MIN_N = 6, MAX_N = 11;
+const MIN_N = 5, MAX_N = 14;
+
+// LinkedIn embeds the official answer: "solution":[{"row":0,"col":7},...]
+// (quotes may be \-escaped). Returns cols[row] = col, or null if absent/invalid.
+function extractEmbeddedSolution(text, size) {
+  const startM = /\\?"solution\\?":\s*\[/.exec(text);
+  if (!startM) return null;
+  let i = startM.index + startM[0].length, depth = 1;
+  const start = i;
+  while (i < text.length && depth > 0) {
+    if (text[i] === "[") depth++;
+    else if (text[i] === "]") depth--;
+    i++;
+  }
+  const block = text.slice(start, i - 1);
+  const cols = new Array(size).fill(-1);
+  const pairRe = /\\?"row\\?":\s*(\d+)\s*,\s*\\?"col\\?":\s*(\d+)/g;
+  let m, count = 0;
+  while ((m = pairRe.exec(block))) {
+    const r = +m[1], c = +m[2];
+    if (r >= size || c >= size || cols[r] !== -1) return null;
+    cols[r] = c;
+    count++;
+  }
+  return (count === size && !cols.includes(-1)) ? cols : null;
+}
+
+function solve(size, regionMap) {
+  const usedCols = new Array(size).fill(false);
+  const usedRegions = new Set();
+  const cols = new Array(size).fill(-1);
+  function backtrack(row) {
+    if (row === size) return true;
+    for (let c = 0; c < size; c++) {
+      if (usedCols[c]) continue;
+      const reg = regionMap[row * size + c];
+      if (usedRegions.has(reg)) continue;
+      if (row > 0 && Math.abs(cols[row - 1] - c) <= 1) continue;
+      usedCols[c] = true;
+      usedRegions.add(reg);
+      cols[row] = c;
+      if (backtrack(row + 1)) return true;
+      usedCols[c] = false;
+      usedRegions.delete(reg);
+      cols[row] = -1;
+    }
+    return false;
+  }
+  return backtrack(0) ? cols : null;
+}
 
 function parseLinkedInSource(text) {
   // Format 1 (View Source): puzzle JSON in the hydration payload —
@@ -62,12 +111,22 @@ const srcPath = path.join(__dirname, "puzzle_source.txt");
 const text = fs.readFileSync(srcPath, "utf8");
 const { n, regions, colors } = parseLinkedInSource(text);
 
-console.log(`Board: ${n}×${n}, ${colors} regions\n`);
-for (let r = 0; r < n; r++) {
-  console.log(regions.slice(r * n, (r + 1) * n).map(v => v.toString(36).toUpperCase()).join(" "));
-}
+console.log(`Board: ${n}×${n}, ${colors} regions`);
 if (colors !== n) {
-  console.log(`\n⚠️  ${colors} regions on a ${n}×${n} board — a valid Queens puzzle needs exactly ${n}.`);
+  console.log(`⚠️  ${colors} regions on a ${n}×${n} board — a valid Queens puzzle needs exactly ${n}.`);
+}
+
+const embedded = extractEmbeddedSolution(text, n);
+const answer = embedded || solve(n, regions);
+console.log(embedded ? "\nAnswer (embedded in page source):" : answer ? "\nAnswer (computed by solver):" : "\nNo solution found!");
+console.log("");
+for (let r = 0; r < n; r++) {
+  const row = regions.slice(r * n, (r + 1) * n).map(v => v.toString(36).toUpperCase());
+  if (answer) row[answer[r]] = "👑";
+  console.log(row.join(" "));
+}
+if (answer) {
+  console.log("\nQueens (row → column, 1-based): " + answer.map((c, r) => `R${r + 1}C${c + 1}`).join("  "));
 }
 
 const hash = `#b=${n}:${regions.map(v => v.toString(36)).join("")}`;
