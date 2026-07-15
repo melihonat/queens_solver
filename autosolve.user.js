@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         LinkedIn Queens Auto-Solver
 // @namespace    queens-solver
-// @version      1.0
+// @version      1.1
 // @description  Solves the daily LinkedIn Queens puzzle and places the crowns for you
 // @match        https://www.linkedin.com/games/queens*
+// @match        http://localhost/*
 // @grant        none
 // ==/UserScript==
 
